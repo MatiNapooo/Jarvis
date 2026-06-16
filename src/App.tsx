@@ -968,6 +968,14 @@ export default function App() {
         
         {/* Sidebar Nav (Desktop) */}
         <aside className="hidden md:flex flex-col w-64 bg-cyan-950/10 border-r border-cyan-500/20 p-4 gap-2">
+          {/* Logo container */}
+          <div className="flex flex-col items-center mb-6 mt-2">
+            <div className="w-24 h-24 rounded-2xl border border-cyan-500/30 p-1 bg-black/40 glow-cyan flex items-center justify-center overflow-hidden">
+              <img src="/icon-192.png" alt="OASIS Logo" className="w-full h-full object-cover rounded-xl" />
+            </div>
+            <span className="font-orbitron font-extrabold text-[9px] text-pink-500 mt-2.5 tracking-widest uppercase text-glow-pink">OASIS CORE</span>
+          </div>
+
           <div className="text-[10px] font-share font-black text-cyan-400/50 uppercase tracking-widest mb-2 px-3">
             Sectores del OASIS
           </div>
@@ -996,7 +1004,7 @@ export default function App() {
           <div className="md:hidden fixed inset-0 z-35 flex">
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}></div>
             <aside className="w-64 bg-cyber-bg border-r border-cyan-500/40 p-4 flex flex-col gap-2 relative z-10 crt-flicker">
-              <div className="flex justify-between items-center mb-4 pb-2 border-b border-cyan-500/20">
+              <div className="flex justify-between items-center mb-2 pb-2 border-b border-cyan-500/20">
                 <span className="font-orbitron font-black text-cyan-400 text-xs tracking-widest">MENÚ PRINCIPAL</span>
                 <button 
                   onClick={() => setSidebarOpen(false)}
@@ -1004,6 +1012,14 @@ export default function App() {
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Mobile Logo container */}
+              <div className="flex flex-col items-center mb-5 mt-2">
+                <div className="w-20 h-20 rounded-2xl border border-cyan-500/30 p-1 bg-black/40 glow-cyan flex items-center justify-center overflow-hidden">
+                  <img src="/icon-192.png" alt="OASIS Logo" className="w-full h-full object-cover rounded-xl" />
+                </div>
+                <span className="font-orbitron font-extrabold text-[8px] text-pink-500 mt-2 tracking-widest uppercase text-glow-pink">OASIS CORE</span>
               </div>
 
               {navItems.map((item) => {

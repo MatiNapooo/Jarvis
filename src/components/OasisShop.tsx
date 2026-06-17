@@ -1,12 +1,13 @@
-import React from 'react';
-import { ShoppingBag, Sparkles, Key, Compass, Zap, Award, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingBag, Sparkles, Key, Compass, Zap, Award, Flame, Plus } from 'lucide-react';
 import type { ShopItem } from '../types/game';
-
 
 interface OasisShopProps {
   coins: number;
   inventory: string[];
+  shopItems: ShopItem[];
   onPurchaseItem: (id: string, cost: number) => void;
+  onAddShopItem: (item: ShopItem) => void;
   playSound: (type: 'click' | 'xp' | 'levelup' | 'success' | 'purchase') => void;
 }
 
@@ -70,10 +71,18 @@ export const DEFAULT_SHOP_ITEMS: ShopItem[] = [
 export const OasisShop: React.FC<OasisShopProps> = ({
   coins,
   inventory,
+  shopItems,
   onPurchaseItem,
+  onAddShopItem,
   playSound,
 }) => {
-  
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [cost, setCost] = useState(150);
+  const [rarity, setRarity] = useState<'Común' | 'Raro' | 'Épico' | 'Legendario'>('Común');
+  const [imageFile, setImageFile] = useState<string>('');
+
   const handleBuy = (item: ShopItem) => {
     if (inventory.includes(item.id)) return;
     if (coins < item.cost) {
@@ -84,6 +93,52 @@ export const OasisShop: React.FC<OasisShopProps> = ({
 
     playSound('purchase');
     onPurchaseItem(item.id, item.cost);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1024 * 1024) { // 1MB
+      alert("La imagen excede el límite de 1MB. Por favor, selecciona una imagen de menor tamaño.");
+      e.target.value = ''; // Reset uploader
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImageFile(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreateReward = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !imageFile) {
+      alert("Por favor completa el nombre y selecciona una imagen para el premio.");
+      return;
+    }
+
+    playSound('success');
+
+    const newItem: ShopItem = {
+      id: `custom_${Date.now()}`,
+      name,
+      description: description.trim() || 'Premio personalizado creado por el operador.',
+      cost,
+      iconName: 'custom_reward',
+      rarity,
+      unlocked: false,
+      imageUrl: imageFile,
+    };
+
+    onAddShopItem(newItem);
+    setName('');
+    setDescription('');
+    setCost(150);
+    setRarity('Común');
+    setImageFile('');
+    setShowForm(false);
   };
 
   const getRarityStyles = (rarity: string) => {
@@ -115,7 +170,7 @@ export const OasisShop: React.FC<OasisShopProps> = ({
   const renderIcon = (iconName: string) => {
     const size = "w-10 h-10";
     if (iconName.startsWith('key_')) {
-      let colorClass = "text-amber-500"; // copper
+      let colorClass = "text-amber-500";
       if (iconName === 'key_jade') colorClass = "text-emerald-500 text-glow-green";
       if (iconName === 'key_crystal') colorClass = "text-cyan-400 text-glow-cyan animate-pulse";
       return <Key className={`${size} ${colorClass}`} />;
@@ -138,15 +193,107 @@ export const OasisShop: React.FC<OasisShopProps> = ({
             CANJEA TUS MONEDAS POR COLECCIONABLES DE COLECCIÓN Y LLAVES DE HALLIDAY
           </p>
         </div>
-        <div className="py-1 px-4 bg-yellow-950/20 border border-yellow-500/30 rounded text-yellow-400 font-orbitron font-bold text-xs tracking-wider flex items-center gap-1.5">
-          <Flame className="w-4 h-4 text-yellow-400 animate-bounce" />
-          MONEDERO: {coins} COINS
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { playSound('click'); setShowForm(!showForm); }}
+            className="px-3 py-1.5 font-share font-bold text-xs bg-pink-950/40 border border-pink-500 hover:bg-pink-500 hover:text-black rounded text-pink-400 transition-all cursor-pointer uppercase tracking-wider"
+          >
+            {showForm ? 'Cancelar' : 'Crear Premio'}
+          </button>
+          <div className="py-1 px-4 bg-yellow-950/20 border border-yellow-500/30 rounded text-yellow-400 font-orbitron font-bold text-xs tracking-wider flex items-center gap-1.5">
+            <Flame className="w-4 h-4 text-yellow-400 animate-bounce" />
+            MONEDERO: {coins} COINS
+          </div>
         </div>
       </div>
 
+      {/* Custom Reward Form */}
+      {showForm && (
+        <form onSubmit={handleCreateReward} className="glass-panel glow-pink rounded-xl p-5 border border-pink-500/20 space-y-4 max-w-xl mx-auto crt-flicker">
+          <h3 className="font-orbitron font-bold text-xs text-pink-500 tracking-wider">CREAR PREMIO PERSONALIZADO</h3>
+          
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-share text-cyan-400 uppercase tracking-widest mb-1">Nombre del Premio</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="ej. Sesión de cine, Comprar un helado, 1 Hora de PS5"
+                className="w-full px-3 py-2 bg-cyan-950/20 border border-cyan-500/30 rounded focus:border-cyan-400 text-cyan-100 font-share text-sm focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-share text-cyan-400 uppercase tracking-widest mb-1">Descripción</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ingresa qué obtienes al reclamar este premio..."
+                rows={2}
+                className="w-full px-3 py-2 bg-cyan-950/20 border border-cyan-500/30 rounded focus:border-cyan-400 text-cyan-100 font-share text-xs focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-share text-cyan-400/80 uppercase mb-1">Costo en Monedas</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={cost}
+                  onChange={(e) => setCost(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-1.5 bg-cyan-950/20 border border-cyan-500/30 rounded text-cyan-100 font-share text-xs text-center focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-share text-cyan-400/80 uppercase mb-1">Rareza</label>
+                <select
+                  value={rarity}
+                  onChange={(e) => setRarity(e.target.value as any)}
+                  className="w-full px-3 py-1.5 bg-cyan-950/20 border border-cyan-500/30 rounded text-cyan-100 font-share text-xs focus:outline-none"
+                >
+                  <option value="Común">🟢 Común</option>
+                  <option value="Raro">🔵 Raro</option>
+                  <option value="Épico">🟣 Épico</option>
+                  <option value="Legendario">🟡 Legendario</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-share text-cyan-400 uppercase tracking-widest mb-1">Cargar Imagen (Máx 1MB)</label>
+              <input
+                type="file"
+                accept="image/*"
+                required
+                onChange={handleImageUpload}
+                className="w-full px-3 py-2 bg-cyan-950/20 border border-cyan-500/30 rounded focus:border-cyan-400 text-cyan-100 font-share text-xs"
+              />
+              {imageFile && (
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-lg border border-pink-500/30 overflow-hidden flex items-center justify-center bg-black/40">
+                    <img src={imageFile} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                  <span className="text-[10px] font-share text-emerald-400">Imagen precargada correctamente.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-cyan-500 text-white font-orbitron font-black text-xs rounded tracking-widest uppercase transition-all hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer border-0"
+          >
+            <Plus className="w-3.5 h-3.5" /> CREAR PREMIO EN EL OASIS
+          </button>
+        </form>
+      )}
+
       {/* Shop Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {DEFAULT_SHOP_ITEMS.map((item) => {
+        {shopItems.map((item) => {
           const isUnlocked = inventory.includes(item.id);
           return (
             <div 
@@ -155,8 +302,12 @@ export const OasisShop: React.FC<OasisShopProps> = ({
             >
               <div>
                 <div className="flex justify-between items-start mb-3">
-                  <div className="p-2.5 bg-black/40 border border-cyan-500/10 rounded-lg">
-                    {renderIcon(item.iconName)}
+                  <div className="p-1.5 bg-black/40 border border-cyan-500/10 rounded-lg w-14 h-14 flex items-center justify-center overflow-hidden shrink-0">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover rounded" />
+                    ) : (
+                      renderIcon(item.iconName)
+                    )}
                   </div>
                   <span className={`text-[9px] font-share font-bold uppercase tracking-wider px-2 py-0.5 rounded ${getRarityBadge(item.rarity)}`}>
                     {item.rarity}
@@ -203,7 +354,7 @@ export const OasisShop: React.FC<OasisShopProps> = ({
         ) : (
           <div className="flex flex-wrap gap-2.5">
             {inventory.map((itemId) => {
-              const item = DEFAULT_SHOP_ITEMS.find(i => i.id === itemId);
+              const item = shopItems.find(i => i.id === itemId);
               if (!item) return null;
               return (
                 <div 

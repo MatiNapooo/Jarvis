@@ -1,12 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Cpu, Play, Pause, RotateCcw, Award, CheckCircle, Clock, Trash2 } from 'lucide-react';
 import type { FocusSession } from '../types/game';
+import { getLocalDateString } from '../utils/date';
 
 interface StudyTrackerProps {
   sessions: FocusSession[];
   onAddSession: (session: FocusSession) => void;
   onDeleteSession: (id: string) => void;
   playSound: (type: 'click' | 'xp' | 'levelup' | 'success' | 'purchase') => void;
+  
+  // Hoisted state
+  pomodoroMinutes: number;
+  pomodoroSeconds: number;
+  pomodoroIsActive: boolean;
+  pomodoroTotalDuration: number;
+  pomodoroCategory: 'Estudio' | 'Trabajo' | 'Diseño' | 'Otro';
+  pomodoroFocusName: string;
+  setPomodoroFocusName: (name: string) => void;
+  setPomodoroCategory: (category: 'Estudio' | 'Trabajo' | 'Diseño' | 'Otro') => void;
+  togglePomodoro: () => void;
+  resetPomodoro: () => void;
 }
 
 export const StudyTracker: React.FC<StudyTrackerProps> = ({
@@ -14,86 +27,24 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
   onAddSession,
   onDeleteSession,
   playSound,
+  pomodoroMinutes,
+  pomodoroSeconds,
+  pomodoroIsActive,
+  pomodoroTotalDuration,
+  pomodoroCategory,
+  pomodoroFocusName,
+  setPomodoroFocusName,
+  setPomodoroCategory,
+  togglePomodoro,
+  resetPomodoro,
 }) => {
   // Mode: Timer vs Manual
   const [activeTab, setActiveTab] = useState<'timer' | 'manual'>('timer');
 
-  // Pomodoro Timer State
-  const [minutes, setMinutes] = useState(25);
-  const [seconds, setSeconds] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const [totalDuration, setTotalDuration] = useState(25 * 60); // in seconds
-  const [category, setCategory] = useState<'Estudio' | 'Trabajo' | 'Diseño' | 'Otro'>('Estudio');
-  const [focusName, setFocusName] = useState('');
-  
   // Manual Logging State
   const [manualName, setManualName] = useState('');
   const [manualCategory, setManualCategory] = useState<'Estudio' | 'Trabajo' | 'Diseño' | 'Otro'>('Estudio');
   const [manualDuration, setManualDuration] = useState(60); // in minutes
-
-  const timerRef = useRef<any>(null);
-
-  // Sound and Timer logic
-  useEffect(() => {
-    if (isActive) {
-      timerRef.current = setInterval(() => {
-        if (seconds > 0) {
-          setSeconds(seconds - 1);
-        } else if (seconds === 0) {
-          if (minutes === 0) {
-            // Timer complete!
-            handleTimerComplete();
-          } else {
-            setMinutes(minutes - 1);
-            setSeconds(59);
-          }
-        }
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isActive, minutes, seconds]);
-
-  const toggleTimer = () => {
-    playSound('click');
-    setIsActive(!isActive);
-  };
-
-  const resetTimer = () => {
-    playSound('click');
-    setIsActive(false);
-    setMinutes(25);
-    setSeconds(0);
-    setTotalDuration(25 * 60);
-  };
-
-  const handleTimerComplete = () => {
-    setIsActive(false);
-    playSound('levelup');
-
-    const durationMins = Math.floor(totalDuration / 60);
-    const xpReward = durationMins * 2;
-    const coinsReward = durationMins * 1;
-
-    const newSession: FocusSession = {
-      id: Date.now().toString(),
-      name: focusName.trim() || `Sesión de ${category}`,
-      category,
-      duration: durationMins,
-      date: new Date().toISOString().split('T')[0],
-      xpEarned: xpReward,
-      coinsEarned: coinsReward,
-    };
-
-    onAddSession(newSession);
-    setFocusName('');
-    setMinutes(25);
-    setSeconds(0);
-  };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +60,7 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
       name: manualName,
       category: manualCategory,
       duration: manualDuration,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       xpEarned: xpReward,
       coinsEarned: coinsReward,
     };
@@ -120,9 +71,9 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
   };
 
   const getPercentage = () => {
-    const currentSeconds = minutes * 60 + seconds;
-    const passed = totalDuration - currentSeconds;
-    return (passed / totalDuration) * 100;
+    const currentSeconds = pomodoroMinutes * 60 + pomodoroSeconds;
+    const passed = pomodoroTotalDuration - currentSeconds;
+    return (passed / pomodoroTotalDuration) * 100;
   };
 
   return (
@@ -171,10 +122,10 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
               ></div>
 
               <div className="font-orbitron text-5xl font-black text-pink-500 text-glow-pink">
-                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                {String(pomodoroMinutes).padStart(2, '0')}:{String(pomodoroSeconds).padStart(2, '0')}
               </div>
               <div className="font-share text-[11px] text-cyan-400 tracking-widest mt-1.5 uppercase">
-                {isActive ? 'Módulo Activo' : 'En Pausa'}
+                {pomodoroIsActive ? 'Módulo Activo' : 'En Pausa'}
               </div>
             </div>
 
@@ -182,10 +133,10 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
             <div className="w-full max-w-sm space-y-4 mb-4">
               <input
                 type="text"
-                value={focusName}
-                onChange={(e) => setFocusName(e.target.value)}
+                value={pomodoroFocusName}
+                onChange={(e) => setPomodoroFocusName(e.target.value)}
                 placeholder="¿En qué estás trabajando? (ej. Estudiar React)"
-                disabled={isActive}
+                disabled={pomodoroIsActive}
                 className="w-full px-3 py-2 bg-cyan-950/20 disabled:opacity-50 border border-cyan-500/30 rounded focus:border-cyan-400 text-cyan-100 font-share text-xs text-center focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
 
@@ -194,10 +145,10 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
                   <button
                     key={cat}
                     type="button"
-                    disabled={isActive}
-                    onClick={() => { playSound('click'); setCategory(cat); }}
+                    disabled={pomodoroIsActive}
+                    onClick={() => { playSound('click'); setPomodoroCategory(cat); }}
                     className={`py-1 rounded border transition-all cursor-pointer ${
-                      category === cat
+                      pomodoroCategory === cat
                         ? 'bg-pink-950/40 border-pink-500 text-pink-400 font-bold'
                         : 'bg-cyan-950/10 border-cyan-500/20 text-cyan-400/70 hover:border-cyan-400/50'
                     }`}
@@ -211,19 +162,19 @@ export const StudyTracker: React.FC<StudyTrackerProps> = ({
             {/* Timer Controls */}
             <div className="flex gap-3 justify-center">
               <button
-                onClick={toggleTimer}
+                onClick={togglePomodoro}
                 className={`px-5 py-2.5 rounded font-share font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all ${
-                  isActive 
+                  pomodoroIsActive 
                     ? 'bg-amber-600/20 border border-amber-500 text-amber-400 hover:bg-amber-500 hover:text-black' 
                     : 'bg-emerald-600/20 border border-emerald-500 text-emerald-400 hover:bg-emerald-500 hover:text-black'
                 }`}
               >
-                {isActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                {isActive ? 'Pausar' : 'Iniciar'}
+                {pomodoroIsActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                {pomodoroIsActive ? 'Pausar' : 'Iniciar'}
               </button>
 
               <button
-                onClick={resetTimer}
+                onClick={resetPomodoro}
                 className="px-5 py-2.5 rounded bg-zinc-800/40 border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-white font-share font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all"
               >
                 <RotateCcw className="w-3.5 h-3.5" />

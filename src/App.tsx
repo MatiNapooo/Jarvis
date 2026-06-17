@@ -12,9 +12,7 @@ import {
   Upload, 
   RefreshCw, 
   Volume2, 
-  VolumeX, 
-  Menu,
-  X
+  VolumeX
 } from 'lucide-react';
 
 import { useSound } from './hooks/useSound';
@@ -27,7 +25,8 @@ import type {
   Quest, 
   SystemLog, 
   OasisData,
-  Reminder
+  Reminder,
+  ShopItem
 } from './types/game';
 
 
@@ -36,9 +35,10 @@ import { GymTracker } from './components/GymTracker';
 import { StudyTracker } from './components/StudyTracker';
 import { FoodTracker } from './components/FoodTracker';
 import { QuestLog } from './components/QuestLog';
-import { OasisShop } from './components/OasisShop';
+import { OasisShop, DEFAULT_SHOP_ITEMS } from './components/OasisShop';
 import { LevelUpModal } from './components/LevelUpModal';
 import { RemindersWidget } from './components/RemindersWidget';
+import { getLocalDateString } from './utils/date';
 
 
 // Initial default quests
@@ -49,7 +49,7 @@ const DEFAULT_QUESTS = (): Quest[] => [
     description: 'Completa una rutina en el gimnasio y registra tus ejercicios.',
     type: 'Diaria',
     completed: false,
-    dateAdded: new Date().toISOString().split('T')[0],
+    dateAdded: getLocalDateString(),
     xpReward: 100,
     coinsReward: 50,
   },
@@ -59,7 +59,7 @@ const DEFAULT_QUESTS = (): Quest[] => [
     description: 'Completa al menos 25 minutos de estudio o trabajo usando el Pomodoro.',
     type: 'Diaria',
     completed: false,
-    dateAdded: new Date().toISOString().split('T')[0],
+    dateAdded: getLocalDateString(),
     xpReward: 50,
     coinsReward: 25,
   },
@@ -69,7 +69,7 @@ const DEFAULT_QUESTS = (): Quest[] => [
     description: 'Alcanza la meta diaria de 2 litros de agua (2000 ml).',
     type: 'Diaria',
     completed: false,
-    dateAdded: new Date().toISOString().split('T')[0],
+    dateAdded: getLocalDateString(),
     xpReward: 50,
     coinsReward: 15,
   },
@@ -79,7 +79,7 @@ const DEFAULT_QUESTS = (): Quest[] => [
     description: 'Desbloquea la Llave de Cobre en el Mercado del OASIS.',
     type: 'Historia',
     completed: false,
-    dateAdded: new Date().toISOString().split('T')[0],
+    dateAdded: getLocalDateString(),
     xpReward: 300,
     coinsReward: 150,
   },
@@ -89,7 +89,7 @@ const DEFAULT_QUESTS = (): Quest[] => [
     description: 'Compra la Llave de Cobre, Jade y Cristal en la tienda del OASIS.',
     type: 'Historia',
     completed: false,
-    dateAdded: new Date().toISOString().split('T')[0],
+    dateAdded: getLocalDateString(),
     xpReward: 1000,
     coinsReward: 500,
   }
@@ -124,7 +124,6 @@ export default function App() {
   const { enabled: soundEnabled, toggleSound, playSound } = useSound();
   const [activeTab, setActiveTab] = useState<string>('terminal');
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
   // States
   const [stats, setStats] = useState<PlayerStats>({
@@ -132,7 +131,7 @@ export default function App() {
     xp: 0,
     coins: 0,
     streak: 1,
-    lastActiveDate: new Date().toISOString().split('T')[0],
+    lastActiveDate: getLocalDateString(),
     title: 'Cazador de Huevos (Gunter)',
     inventory: [],
   });
@@ -143,6 +142,15 @@ export default function App() {
   const [quests, setQuests] = useState<Quest[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
+
+  // Hoisted Pomodoro State
+  const [pomodoroMinutes, setPomodoroMinutes] = useState(25);
+  const [pomodoroSeconds, setPomodoroSeconds] = useState(0);
+  const [pomodoroIsActive, setPomodoroIsActive] = useState(false);
+  const [pomodoroTotalDuration, setPomodoroTotalDuration] = useState(25 * 60);
+  const [pomodoroCategory, setPomodoroCategory] = useState<'Estudio' | 'Trabajo' | 'Diseño' | 'Otro'>('Estudio');
+  const [pomodoroFocusName, setPomodoroFocusName] = useState('');
 
   // Level Up Modal state
   const [showLevelUpModal, setShowLevelUpModal] = useState<boolean>(false);
@@ -150,85 +158,131 @@ export default function App() {
 
   // Load database from LocalStorage
   useEffect(() => {
+    const todayStr = getLocalDateString();
     const savedData = localStorage.getItem('oasis_jarvis_data');
+    
+    let loadedStats: PlayerStats;
+    let loadedWorkouts: Workout[] = [];
+    let loadedFocusSessions: FocusSession[] = [];
+    let loadedMeals: Meal[] = [];
+    let loadedWaterLogs: DailyWater[] = [];
+    let loadedQuests: Quest[] = [];
+    let loadedLogs: SystemLog[] = [];
+    let loadedReminders: Reminder[] = [];
+    let loadedShopItems: ShopItem[] = [];
+
     if (savedData) {
       try {
         const data: OasisData = JSON.parse(savedData);
-        if (data.stats) setStats(data.stats);
-        if (data.workouts) setWorkouts(data.workouts);
-        if (data.focusSessions) setFocusSessions(data.focusSessions);
-        if (data.meals) setMeals(data.meals);
-        if (data.waterLogs) setWaterLogs(data.waterLogs);
-        if (data.quests) {
-          setQuests(data.quests);
-        } else {
-          setQuests(DEFAULT_QUESTS());
-        }
-        if (data.logs) {
-          setLogs(data.logs);
-        } else {
-          setLogs(INITIAL_LOGS());
-        }
-        if (data.reminders) {
-          setReminders(data.reminders);
-        } else {
-          setReminders([]);
-        }
+        loadedStats = data.stats;
+        loadedWorkouts = data.workouts || [];
+        loadedFocusSessions = data.focusSessions || [];
+        loadedMeals = data.meals || [];
+        loadedWaterLogs = data.waterLogs || [];
+        loadedQuests = data.quests || DEFAULT_QUESTS();
+        loadedLogs = data.logs || INITIAL_LOGS();
+        loadedReminders = data.reminders || [];
+        loadedShopItems = data.shopItems || DEFAULT_SHOP_ITEMS;
       } catch (e) {
         console.error("Error loading local data:", e);
-        initializeDefaultData();
+        loadedStats = {
+          level: 1,
+          xp: 0,
+          coins: 50,
+          streak: 1,
+          lastActiveDate: todayStr,
+          title: 'Cazador de Huevos (Gunter)',
+          inventory: [],
+        };
+        loadedQuests = DEFAULT_QUESTS();
+        loadedLogs = INITIAL_LOGS();
+        loadedShopItems = DEFAULT_SHOP_ITEMS;
       }
     } else {
-      initializeDefaultData();
+      loadedStats = {
+        level: 1,
+        xp: 0,
+        coins: 50,
+        streak: 1,
+        lastActiveDate: todayStr,
+        title: 'Cazador de Huevos (Gunter)',
+        inventory: [],
+      };
+      loadedQuests = DEFAULT_QUESTS();
+      loadedLogs = INITIAL_LOGS();
+      loadedShopItems = DEFAULT_SHOP_ITEMS;
     }
+
+    // Day Rollover Check
+    if (loadedStats.lastActiveDate !== todayStr) {
+      const lastDate = new Date(loadedStats.lastActiveDate);
+      const today = new Date(todayStr);
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      let newStreak = loadedStats.streak;
+      let dayRolloverLog: SystemLog;
+
+      if (diffDays === 1) {
+        newStreak += 1;
+        dayRolloverLog = {
+          id: `streak-${Date.now()}`,
+          text: `¡Doble recompensa diaria! Racha activa de ${newStreak} días en el OASIS.`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString(),
+        };
+      } else {
+        newStreak = 1;
+        dayRolloverLog = {
+          id: `streak-${Date.now()}`,
+          text: `Conexión perdida por varios días. Racha de días consecutivos reseteada a 1.`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString(),
+        };
+      }
+
+      loadedStats = {
+        ...loadedStats,
+        streak: newStreak,
+        lastActiveDate: todayStr
+      };
+      
+      // Reset daily quests
+      loadedQuests = loadedQuests.map(q => 
+        q.type === 'Diaria' 
+          ? { ...q, completed: false, dateCompleted: undefined, dateAdded: todayStr } 
+          : q
+      );
+
+      loadedLogs = [...loadedLogs, dayRolloverLog];
+    }
+
+    setStats(loadedStats);
+    setWorkouts(loadedWorkouts);
+    setFocusSessions(loadedFocusSessions);
+    setMeals(loadedMeals);
+    setWaterLogs(loadedWaterLogs);
+    setQuests(loadedQuests);
+    setLogs(loadedLogs);
+    setReminders(loadedReminders);
+    setShopItems(loadedShopItems);
+
+    const data: OasisData = {
+      stats: loadedStats,
+      workouts: loadedWorkouts,
+      focusSessions: loadedFocusSessions,
+      meals: loadedMeals,
+      waterLogs: loadedWaterLogs,
+      quests: loadedQuests,
+      inventory: loadedStats.inventory,
+      logs: loadedLogs,
+      reminders: loadedReminders,
+      shopItems: loadedShopItems,
+    };
+    localStorage.setItem('oasis_jarvis_data', JSON.stringify(data));
   }, []);
 
-
-  // Sync / Streak check on load
-  useEffect(() => {
-    if (stats.lastActiveDate) {
-      const todayStr = new Date().toISOString().split('T')[0];
-      if (stats.lastActiveDate !== todayStr) {
-        // Calculate days difference
-        const lastDate = new Date(stats.lastActiveDate);
-        const today = new Date(todayStr);
-        const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        let newStreak = stats.streak;
-        if (diffDays === 1) {
-          // Consecutiv day!
-          newStreak += 1;
-          // Add system log
-          const streakLog: SystemLog = {
-            id: `streak-${Date.now()}`,
-            text: `¡Doble recompensa diaria! Racha activa de ${newStreak} días en el OASIS.`,
-            type: 'system',
-            timestamp: new Date().toLocaleTimeString(),
-          };
-          setLogs(prev => [...prev, streakLog]);
-        } else if (diffDays > 1) {
-          // Streak broken
-          newStreak = 1;
-          const streakBreakLog: SystemLog = {
-            id: `streak-${Date.now()}`,
-            text: `Conexión perdida por varios días. Racha de días consecutivos reseteada a 1.`,
-            type: 'system',
-            timestamp: new Date().toLocaleTimeString(),
-          };
-          setLogs(prev => [...prev, streakBreakLog]);
-        }
-
-        setStats(prev => ({
-          ...prev,
-          streak: newStreak,
-          lastActiveDate: todayStr
-        }));
-      }
-    }
-  }, [stats.lastActiveDate]);
-
-  // Save changes to local storage
+  // Save changes to local storage helper
   const saveData = (
     newStats: PlayerStats,
     newWorkouts: Workout[],
@@ -237,7 +291,8 @@ export default function App() {
     newWaters: DailyWater[],
     newQuests: Quest[],
     newLogs: SystemLog[],
-    newReminders: Reminder[] = reminders
+    newReminders: Reminder[] = reminders,
+    newShopItems: ShopItem[] = shopItems
   ) => {
     const data: OasisData = {
       stats: newStats,
@@ -248,17 +303,18 @@ export default function App() {
       quests: newQuests,
       inventory: newStats.inventory,
       logs: newLogs,
-      reminders: newReminders
+      reminders: newReminders,
+      shopItems: newShopItems
     };
     localStorage.setItem('oasis_jarvis_data', JSON.stringify(data));
   };
 
   const initializeDefaultData = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const initialStats: PlayerStats = {
       level: 1,
       xp: 0,
-      coins: 50, // Start with some pocket change!
+      coins: 50,
       streak: 1,
       lastActiveDate: todayStr,
       title: 'Cazador de Huevos (Gunter)',
@@ -272,6 +328,7 @@ export default function App() {
     setQuests(DEFAULT_QUESTS());
     setLogs(INITIAL_LOGS());
     setReminders([]);
+    setShopItems(DEFAULT_SHOP_ITEMS);
 
     const data: OasisData = {
       stats: initialStats,
@@ -282,11 +339,119 @@ export default function App() {
       quests: DEFAULT_QUESTS(),
       inventory: [],
       logs: INITIAL_LOGS(),
-      reminders: []
+      reminders: [],
+      shopItems: DEFAULT_SHOP_ITEMS
     };
     localStorage.setItem('oasis_jarvis_data', JSON.stringify(data));
   };
 
+  // Hoisted Pomodoro Interval logic
+  useEffect(() => {
+    let interval: any = null;
+    if (pomodoroIsActive) {
+      interval = setInterval(() => {
+        if (pomodoroSeconds > 0) {
+          setPomodoroSeconds(pomodoroSeconds - 1);
+        } else if (pomodoroSeconds === 0) {
+          if (pomodoroMinutes === 0) {
+            handlePomodoroComplete();
+          } else {
+            setPomodoroMinutes(pomodoroMinutes - 1);
+            setPomodoroSeconds(59);
+          }
+        }
+      }, 1000);
+    } else {
+      if (interval) clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [pomodoroIsActive, pomodoroMinutes, pomodoroSeconds]);
+
+  const handlePomodoroComplete = () => {
+    setPomodoroIsActive(false);
+    playSound('levelup');
+
+    const durationMins = Math.floor(pomodoroTotalDuration / 60);
+    const xpReward = durationMins * 2;
+    const coinsReward = durationMins * 1;
+
+    const newSession: FocusSession = {
+      id: Date.now().toString(),
+      name: pomodoroFocusName.trim() || `Sesión de ${pomodoroCategory}`,
+      category: pomodoroCategory,
+      duration: durationMins,
+      date: getLocalDateString(),
+      xpEarned: xpReward,
+      coinsEarned: coinsReward,
+    };
+
+    const newSessions = [newSession, ...focusSessions];
+    setFocusSessions(newSessions);
+
+    const studyLog: SystemLog = {
+      id: `focus-${Date.now()}`,
+      text: `🧠 PORTAL MENTAL: Completado Pomodoro "${newSession.name}" (${durationMins} min). +${xpReward} XP y +${coinsReward} Monedas.`,
+      type: 'system',
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    const newLogs = [...logs, studyLog];
+    setLogs(newLogs);
+
+    const updatedStats = {
+      ...stats,
+      coins: stats.coins + coinsReward,
+    };
+    setStats(updatedStats);
+    addXp(xpReward, updatedStats);
+
+    const newQuests = quests.map(q => {
+      if (q.id === 'd2' && !q.completed) {
+        setTimeout(() => {
+          addXp(q.xpReward);
+          addCoins(q.coinsReward);
+          setLogs(prev => [...prev, {
+            id: `quest-complete-d2-${Date.now()}`,
+            text: `🏆 MISIÓN DIARIA COMPLETADA: "Sesión de Enfoque Mental" (+${q.xpReward} XP / +${q.coinsReward} Monedas)`,
+            type: 'system',
+            timestamp: new Date().toLocaleTimeString(),
+          }]);
+        }, 100);
+        return { ...q, completed: true, dateCompleted: getLocalDateString() };
+      }
+      return q;
+    });
+    setQuests(newQuests);
+
+    saveData(updatedStats, workouts, newSessions, meals, waterLogs, newQuests, newLogs, reminders, shopItems);
+
+    setPomodoroFocusName('');
+    setPomodoroMinutes(25);
+    setPomodoroSeconds(0);
+    setPomodoroTotalDuration(25 * 60);
+
+    triggerWebNotification(`¡Has completado tu sesión de enfoque: ${newSession.name}!`);
+  };
+
+  const togglePomodoro = () => {
+    playSound('click');
+    setPomodoroIsActive(!pomodoroIsActive);
+  };
+
+  const resetPomodoro = () => {
+    playSound('click');
+    setPomodoroIsActive(false);
+    setPomodoroMinutes(25);
+    setPomodoroSeconds(0);
+    setPomodoroTotalDuration(25 * 60);
+  };
+
+  const handleAddShopItem = (item: ShopItem) => {
+    const newShopItems = [...shopItems, item];
+    setShopItems(newShopItems);
+    saveData(stats, workouts, focusSessions, meals, waterLogs, quests, logs, reminders, newShopItems);
+  };
 
   // Gamification: XP addition logic
   const addXp = (amount: number, customStats?: PlayerStats) => {
@@ -296,7 +461,6 @@ export default function App() {
       let newLevel = currentStats.level;
       let leveledUp = false;
 
-      // XP needed formula: Level * 100 + 100
       let xpNeeded = newLevel * 100 + 100;
       while (newXp >= xpNeeded) {
         newXp -= xpNeeded;
@@ -386,7 +550,7 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString(),
           }]);
         }, 100);
-        return { ...q, completed: true, dateCompleted: new Date().toISOString().split('T')[0] };
+        return { ...q, completed: true, dateCompleted: getLocalDateString() };
       }
       return q;
     });
@@ -439,7 +603,7 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString(),
           }]);
         }, 100);
-        return { ...q, completed: true, dateCompleted: new Date().toISOString().split('T')[0] };
+        return { ...q, completed: true, dateCompleted: getLocalDateString() };
       }
       return q;
     });
@@ -483,7 +647,7 @@ export default function App() {
 
   // Log Water Intake
   const handleUpdateWater = (amountMl: number) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     let newWaters = [...waterLogs];
     const index = newWaters.findIndex(w => w.date === todayStr);
 
@@ -524,7 +688,7 @@ export default function App() {
               timestamp: new Date().toLocaleTimeString(),
             }]);
           }, 100);
-          return { ...q, completed: true, dateCompleted: new Date().toISOString().split('T')[0] };
+          return { ...q, completed: true, dateCompleted: getLocalDateString() };
         }
         return q;
       });
@@ -535,7 +699,7 @@ export default function App() {
   };
 
   const handleResetWater = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const newWaters = waterLogs.map(w => {
       if (w.date === todayStr) {
         return { ...w, amountMl: 0 };
@@ -579,7 +743,7 @@ export default function App() {
         return { 
           ...q, 
           completed: nextState, 
-          dateCompleted: nextState ? new Date().toISOString().split('T')[0] : undefined 
+          dateCompleted: nextState ? getLocalDateString() : undefined 
         };
       }
       return q;
@@ -652,7 +816,7 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString(),
           }]);
         }, 100);
-        return { ...q, completed: true, dateCompleted: new Date().toISOString().split('T')[0] };
+        return { ...q, completed: true, dateCompleted: getLocalDateString() };
       }
       
       // All Keys check
@@ -672,7 +836,7 @@ export default function App() {
               timestamp: new Date().toLocaleTimeString(),
             }]);
           }, 100);
-          return { ...q, completed: true, dateCompleted: new Date().toISOString().split('T')[0] };
+          return { ...q, completed: true, dateCompleted: getLocalDateString() };
         }
       }
       
@@ -748,12 +912,32 @@ export default function App() {
     playSound('levelup'); // Play retro chime
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
-        new Notification("JARVIS // Alerta OASIS", {
-          body: `Parzival, recuerda: ${text}`,
-          icon: "/icon-192.png",
-          tag: "oasis-reminder",
-          requireInteraction: true
-        });
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then((registration) => {
+            registration.showNotification("JARVIS // Alerta OASIS", {
+              body: `Parzival, recuerda: ${text}`,
+              icon: "/icon-192.png",
+              badge: "/icon-192.png",
+              tag: "oasis-reminder",
+              vibrate: [200, 100, 200],
+              requireInteraction: true
+            } as any);
+          }).catch(() => {
+            new Notification("JARVIS // Alerta OASIS", {
+              body: `Parzival, recuerda: ${text}`,
+              icon: "/icon-192.png",
+              tag: "oasis-reminder",
+              requireInteraction: true
+            });
+          });
+        } else {
+          new Notification("JARVIS // Alerta OASIS", {
+            body: `Parzival, recuerda: ${text}`,
+            icon: "/icon-192.png",
+            tag: "oasis-reminder",
+            requireInteraction: true
+          });
+        }
       } catch (err) {
         console.warn("Notification failed:", err);
       }
@@ -763,7 +947,7 @@ export default function App() {
   // Notification Alarm Check Loop
   useEffect(() => {
     const checkInterval = setInterval(() => {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalDateString();
       const nowTimeStr = new Date().toTimeString().slice(0, 5); // "HH:MM"
 
       let notifiedCount = 0;
@@ -812,7 +996,7 @@ export default function App() {
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', jsonString);
-    downloadAnchor.setAttribute('download', `jarvis_oasis_backup_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `jarvis_oasis_backup_${getLocalDateString()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -861,7 +1045,6 @@ export default function App() {
   // Nav helper
   const navigateToTab = (tab: string) => {
     setActiveTab(tab);
-    setSidebarOpen(false);
   };
 
   // Navigation tabs config
@@ -893,13 +1076,6 @@ export default function App() {
       <header className="sticky top-0 z-40 bg-cyber-bg/90 backdrop-blur-md border-b border-cyan-500/30 px-4 py-3 flex items-center justify-between shadow-lg">
         {/* User profile */}
         <div className="flex items-center gap-2.5">
-          <button 
-            onClick={() => { playSound('click'); setSidebarOpen(!sidebarOpen); }}
-            className="md:hidden p-1.5 text-cyan-400 hover:bg-cyan-950/20 border border-cyan-500/20 rounded cursor-pointer"
-          >
-            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-          
           <div className="text-left">
             <h1 className="font-orbitron font-extrabold text-sm md:text-base text-cyan-400 tracking-wider text-glow-cyan m-0 flex items-center gap-1.5">
               <span>JARVIS</span>
@@ -999,50 +1175,7 @@ export default function App() {
           })}
         </aside>
 
-        {/* Mobile Sidebar overlay */}
-        {sidebarOpen && (
-          <div className="md:hidden fixed inset-0 z-35 flex">
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}></div>
-            <aside className="w-64 bg-cyber-bg border-r border-cyan-500/40 p-4 flex flex-col gap-2 relative z-10 crt-flicker">
-              <div className="flex justify-between items-center mb-2 pb-2 border-b border-cyan-500/20">
-                <span className="font-orbitron font-black text-cyan-400 text-xs tracking-widest">MENÚ PRINCIPAL</span>
-                <button 
-                  onClick={() => setSidebarOpen(false)}
-                  className="text-cyan-400 p-1 rounded hover:bg-cyan-950/20 border border-cyan-500/20 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
 
-              {/* Mobile Logo container */}
-              <div className="flex flex-col items-center mb-5 mt-2">
-                <div className="w-20 h-20 rounded-2xl border border-cyan-500/30 p-1 bg-black/40 glow-cyan flex items-center justify-center overflow-hidden">
-                  <img src="/icon-192.png" alt="OASIS Logo" className="w-full h-full object-cover rounded-xl" />
-                </div>
-                <span className="font-orbitron font-extrabold text-[8px] text-pink-500 mt-2 tracking-widest uppercase text-glow-pink">OASIS CORE</span>
-              </div>
-
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isTabActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => { playSound('click'); navigateToTab(item.id); }}
-                    className={`w-full py-3 px-3 rounded-lg font-orbitron font-semibold text-xs tracking-wider flex items-center gap-3 transition-all cursor-pointer text-left border ${
-                      isTabActive
-                        ? 'bg-cyan-500 text-black border-cyan-500 font-bold'
-                        : 'text-cyan-400 border-transparent hover:border-cyan-500/40 hover:bg-cyan-950/15'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </aside>
-          </div>
-        )}
 
         {/* Core Content Area */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-5xl mx-auto w-full pb-24 md:pb-6">
@@ -1158,6 +1291,16 @@ export default function App() {
               onAddSession={handleAddFocus}
               onDeleteSession={handleDeleteFocus}
               playSound={playSound}
+              pomodoroMinutes={pomodoroMinutes}
+              pomodoroSeconds={pomodoroSeconds}
+              pomodoroIsActive={pomodoroIsActive}
+              pomodoroTotalDuration={pomodoroTotalDuration}
+              pomodoroCategory={pomodoroCategory}
+              pomodoroFocusName={pomodoroFocusName}
+              setPomodoroFocusName={setPomodoroFocusName}
+              setPomodoroCategory={setPomodoroCategory}
+              togglePomodoro={togglePomodoro}
+              resetPomodoro={resetPomodoro}
             />
           )}
 
@@ -1187,7 +1330,9 @@ export default function App() {
             <OasisShop 
               coins={stats.coins}
               inventory={stats.inventory}
+              shopItems={shopItems}
               onPurchaseItem={handlePurchaseItem}
+              onAddShopItem={handleAddShopItem}
               playSound={playSound}
             />
           )}

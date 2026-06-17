@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Trash2, Coffee } from 'lucide-react';
 import type { Meal, DailyWater } from '../types/game';
+import { getLocalDateString } from '../utils/date';
 
 
 interface FoodTrackerProps {
@@ -30,7 +31,7 @@ export const FoodTracker: React.FC<FoodTrackerProps> = ({
   const [carbs, setCarbs] = useState(40);
   const [fats, setFats] = useState(10);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const todayMeals = meals.filter(m => m.date === todayStr);
 
   const totalCalories = todayMeals.reduce((acc, curr) => acc + curr.calories, 0);
@@ -227,8 +228,9 @@ export const FoodTracker: React.FC<FoodTrackerProps> = ({
                   <input
                     type="number"
                     required
+                    step="any"
                     value={protein}
-                    onChange={(e) => setProtein(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setProtein(parseFloat(e.target.value) || 0)}
                     className="w-full px-2 py-1.5 bg-cyan-950/20 border border-cyan-500/30 rounded text-cyan-100 font-share text-xs text-center"
                   />
                 </div>
@@ -237,8 +239,9 @@ export const FoodTracker: React.FC<FoodTrackerProps> = ({
                   <input
                     type="number"
                     required
+                    step="any"
                     value={carbs}
-                    onChange={(e) => setCarbs(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setCarbs(parseFloat(e.target.value) || 0)}
                     className="w-full px-2 py-1.5 bg-cyan-950/20 border border-cyan-500/30 rounded text-cyan-100 font-share text-xs text-center"
                   />
                 </div>
@@ -247,16 +250,55 @@ export const FoodTracker: React.FC<FoodTrackerProps> = ({
                   <input
                     type="number"
                     required
+                    step="any"
                     value={fats}
-                    onChange={(e) => setFats(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setFats(parseFloat(e.target.value) || 0)}
                     className="w-full px-2 py-1.5 bg-cyan-950/20 border border-cyan-500/30 rounded text-cyan-100 font-share text-xs text-center"
                   />
                 </div>
               </div>
 
+              {/* Recent meals autofill */}
+              {(() => {
+                const uniquePastMeals = meals.reduce((acc: Meal[], curr) => {
+                  if (!acc.some(m => m.name.toLowerCase() === curr.name.toLowerCase())) {
+                    acc.push(curr);
+                  }
+                  return acc;
+                }, []).slice(0, 6);
+
+                if (uniquePastMeals.length === 0) return null;
+
+                return (
+                  <div className="border-t border-cyan-500/10 pt-3 mt-1">
+                    <span className="block text-[10px] font-share text-cyan-400/80 uppercase mb-2">Replicar Comidas Frecuentes (Autocompletar):</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {uniquePastMeals.map(pm => (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => {
+                            setName(pm.name);
+                            setCalories(pm.calories);
+                            setProtein(pm.protein);
+                            setCarbs(pm.carbs);
+                            setFats(pm.fats);
+                            setType(pm.type);
+                            playSound('click');
+                          }}
+                          className="px-2 py-1 bg-cyan-950/20 hover:bg-cyan-500 hover:text-black border border-cyan-500/25 text-[10px] font-share text-cyan-300 rounded transition-all cursor-pointer hover:border-cyan-400"
+                        >
+                          {pm.name} ({pm.calories} kcal)
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <button
                 type="submit"
-                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-pink-500 text-white font-orbitron font-black text-xs rounded tracking-widest uppercase transition-all hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer border-0"
+                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-pink-500 text-white font-orbitron font-black text-xs rounded tracking-widest uppercase transition-all hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer border-0 animate-pulse hover:animate-none"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 LOGUEAR ALIMENTO EN EL OASIS (+30 XP)

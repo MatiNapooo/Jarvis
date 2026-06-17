@@ -65,6 +65,7 @@ export interface ShopItem {
   iconName: string; // Lucide icon identifier
   rarity: 'Común' | 'Raro' | 'Épico' | 'Legendario';
   unlocked: boolean;
+  imageUrl?: string; // Custom reward image Base64 data URL
 }
 
 export interface PlayerStats {
@@ -104,5 +105,6 @@ export interface OasisData {
   inventory: string[];
   logs: SystemLog[];
   reminders?: Reminder[];
+  shopItems?: ShopItem[];
 }
 
